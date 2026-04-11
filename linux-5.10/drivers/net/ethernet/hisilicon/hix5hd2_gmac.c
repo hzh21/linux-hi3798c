@@ -301,6 +301,7 @@ static void hix5hd2_config_port(struct net_device *dev, u32 speed, u32 duplex)
 		else
 			val = RGMII_SPEED_10;
 		break;
+	case PHY_INTERFACE_MODE_RMII:
 	case PHY_INTERFACE_MODE_MII:
 		if (speed == SPEED_100)
 			val = MII_SPEED_100;
