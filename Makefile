@@ -14,7 +14,7 @@ ifneq ($(GIT_VER),)
 LOCALVERSION="-$(GIT_VER)"
 endif
 
-MAKE_ARCH = make -C $(KDIR) CROSS_COMPILE=$(CROSS_GCC) ARCH=arm64 LOCALVERSION=$(LOCALVERSION)
+MAKE_ARCH = make -C $(KDIR) CROSS_COMPILE=$(CROSS_GCC) ARCH=arm64
 J=$(shell nproc)
 
 all: kernel modules
