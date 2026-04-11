@@ -1,0 +1,35 @@
+name: Build IS-S10 Linux 5.10 Kernel
+
+# 触发条件：当你推送到 main 分支，或者在网页上手动点击运行
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Build Repository
+      uses: actions/checkout@v4
+      with:
+        # fetch-depth: 0 确保拉取完整的 git 历史，这对 Makefile 里获取 GIT_VER 有帮助
+        fetch-depth: 0 
+
+    - name: Install Cross-Compilation Toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu build-essential bc bison flex libssl-dev make libc6-dev libncurses5-dev xz-utils
+
+    - name: Compile Kernel and Modules
+      run: |
+        # 直接运行你仓库里的 Makefile
+        make all
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: is-s10-kernel-5.10-output
+        path: output/
+        retention-days: 7
