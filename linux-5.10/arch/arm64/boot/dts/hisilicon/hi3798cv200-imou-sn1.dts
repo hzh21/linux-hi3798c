@@ -104,11 +104,11 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	phy-handle = <&eth_phy1>;
-	phy-mode = "rgmii-id";
+	phy-mode = "rmii-id";
 	hisilicon,phy-reset-delays-us = <30000 30000 50000>;
 
-	eth_phy1: phy@3 {
-		reg = <3>;
+	eth_phy1: phy@1 {
+		reg = <1>;
 	};
 };
 
