@@ -1,21 +1,61 @@
-- name: Quick Compile DTB Only
+name: Build IS-S10 Quick DTB
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: 'Build Mode (quick_dtb / full)'
+        required: true
+        default: 'quick_dtb'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Build Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Install Dependencies
       run: |
-        # 1. 定义变量 (对应你 Makefile 里的设置)
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu device-tree-compiler bc bison flex make
+
+    - name: Compile
+      run: |
+        # 定义变量
         KDIR="linux-5.10"
         KCFG="sn1-5.10.config"
         CROSS_GCC="aarch64-linux-gnu-"
-        
-        # 2. 准备内核配置 (.config)
-        echo ">>> 正在准备内核配置..."
+        export ARCH=arm64
+        export CROSS_COMPILE=$CROSS_GCC
+
+        # 准备配置
+        echo ">>> Preparing kernel config..."
         cp -f $KCFG $KDIR/.config
-        make -C $KDIR CROSS_COMPILE=$CROSS_GCC ARCH=arm64 olddefconfig
-        
-        # 3. 仅编译设备树 (这步通常只要 10-20 秒)
-        echo ">>> 正在编译设备树 (dtbs)..."
-        make -C $KDIR CROSS_COMPILE=$CROSS_GCC ARCH=arm64 dtbs
-        
-        # 4. 收集产物
-        mkdir -p output/
-        # 这里的路径对应你 Makefile 里的 hisilicon/hi3798cv200-imou-sn1.dtb
-        cp $KDIR/arch/arm64/boot/dts/hisilicon/hi3798cv200-imou-sn1.dtb output/is-s10.dtb
-        echo ">>> 编译完成，产物已放入 output/is-s10.dtb"
+        make -C $KDIR olddefconfig
+
+        # 根据模式编译
+        if [[ "${{ github.event.inputs.build_mode }}" == "quick_dtb" ]] || [[ "${{ github.event_name }}" == "push" ]]; then
+          echo ">>> Fast mode: Compiling DTBS only..."
+          make -C $KDIR dtbs
+          mkdir -p output/
+          find $KDIR/arch/arm64/boot/dts/hisilicon/ -name "*.dtb" -exec cp {} output/ \;
+        else
+          echo ">>> Full mode: Compiling Image and Modules..."
+          make -C $KDIR -j$(nproc) Image modules dtbs
+          mkdir -p output/
+          cp $KDIR/arch/arm64/boot/Image output/
+          find $KDIR/arch/arm64/boot/dts/hisilicon/ -name "*.dtb" -exec cp {} output/ \;
+        fi
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: is-s10-build-output
+        path: output/
+        retention-days: 1
