@@ -127,8 +127,6 @@
 
 &xhci0 {
 	status = "okay";
-	phys = <&usb2_phy1_port1>;
-	phy-names = "usb2-phy";
 };
 
 &ohci { status = "okay"; };
