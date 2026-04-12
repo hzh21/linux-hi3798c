@@ -70,13 +70,57 @@
 
 /* --- 以下是针对各个控制器的开启与配置 --- */
 
-&gpio2 { status = "okay"; };
-&gpio3 { status = "okay"; };
-&gpio6 { status = "okay"; };
-&gpio8 { status = "okay"; };
-&gpio9 { status = "okay"; };
-&gpio10 { status = "okay"; };
-&gpio11 { status = "okay"; };
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&gpio2 {
+	status = "okay";
+};
+
+&gpio3 {
+	status = "okay";
+};
+
+&gpio4 {
+	status = "okay";
+};
+
+&gpio5 {
+	status = "okay";
+};
+
+&gpio6 {
+	status = "okay";
+};
+
+&gpio7 {
+	status = "okay";
+};
+
+&gpio8 {
+	status = "okay";
+};
+
+&gpio9 {
+	status = "okay";
+};
+
+&gpio10 {
+	status = "okay";
+};
+
+&gpio11 {
+	status = "okay";
+};
+
+&gpio12 {
+	status = "okay";
+};
 
 &emmc {
 	status = "okay";
