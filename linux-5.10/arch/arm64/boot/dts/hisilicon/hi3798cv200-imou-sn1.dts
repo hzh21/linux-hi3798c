@@ -147,32 +147,7 @@
 &pmx0 {
 	pinctrl-single,gpio-range = <
 		&range 0  8 2  /* 【关键】恢复模式 2，保住 UART0 串口输出 */
-		&range 8  1 0  
-		&range 9  4 2  /* 保留原厂配置 */
-		&range 13 1 0
-		&range 14 1 1
-		&range 15 1 0
-		&range 16 5 0  /* GPIO 2 */
-		&range 21 3 0
-		&range 24 4 0  /* GPIO 3 */
-		&range 28 2 2
-		&range 86 1 1
-		&range 87 1 0
-		&range 30 4 2  /* GPIO 4 */
-		&range 34 3 0
-		&range 37 1 2
-		&range 38 3 2  /* GPIO 6 */
-		&range 41 2 0
-		&range 46 3 2  /* GPIO 7 */
-		&range 49 5 0  /* GPIO 7 */
-		&range 54 8 0  /* GPIO 8 */
-		
-		/* --- 下面这几行是重点改造区，把 RGMII 抢回来做 GPIO --- */
-		&range 64 8 0  /* GPIO 9: 包含 LED(477) 和 WiFi电源(484) */
-		&range 72 8 0  /* GPIO 10: 包含 SATA电源(492) */
-		&range 80 8 0  /* GPIO 11: 包含绿灯(493) */
-		
-		&range 88 8 0  /* GPIO 12 */
+		&range 8  92 0
 	>;
 
 	pinctrl-names = "default";
