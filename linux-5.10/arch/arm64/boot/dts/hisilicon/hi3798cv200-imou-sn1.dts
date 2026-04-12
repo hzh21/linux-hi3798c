@@ -7,8 +7,8 @@
 #include "poplar-pinctrl.dtsi"
 
 / {
-	model = "imou-sn1";
-	compatible = "imou,sn1", "hisilicon,hi3798cv200";
+	model = "is-s10";
+	compatible = "is,s10", "hisilicon,hi3798cv200";
 
 	aliases {
 		serial0 = &uart0;
@@ -25,49 +25,45 @@
 	};
 
 	leds {
-		compatible = "gpio-leds";
+		/* 系统运行指示灯 - 蓝 */
+    system_ready {
+        label = "blue:power";
+        gpios = <&gpio9 0 GPIO_ACTIVE_LOW>; /* 对应 477 */
+        default-state = "on";
+    }
 
-		sata-white {
-			label = "sata-white";
-			gpios = <&gpio3 0 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-			linux,default-trigger = "disk-activity";
-		};
+    /* 交互反馈灯 - 默认关闭，触发时闪烁 */
+    ir_feedback {
+        label = "blue:status";
+        gpios = <&gpio8 1 GPIO_ACTIVE_LOW>; /* 对应 472 的蓝色端 */
+        linux,default-trigger = "rc-feedback"; /* 绑定到遥控器反馈 */
+    }
 
-		sata-red {
-			label = "sata-red";
-			gpios = <&gpio2 6 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-		};
+    /* 启动提示灯 - 绿 */
+    boot_indicator {
+        label = "green:boot";
+        gpios = <&gpio11 0 GPIO_ACTIVE_HIGH>; /* 对应 493 */
+        default-state = "off";
+    };
 
-		pwr-white {
-			label = "pwr-white";
-			gpios = <&gpio2 5 GPIO_ACTIVE_LOW>;
-			default-state = "on";
-		};
-
-		pwr-red {
-			label = "pwr-red";
-			gpios = <&gpio3 1 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-		};
+	
 	};
 
 	vcc_sata: regulator-vcc-sata {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc-sata";
-		gpio = <&gpio6 3 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio10 7 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
 
-	vcc_sdio2: regulator-vcc-sdio2 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc-sdio2";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio8 1 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		startup-delay-us = <100000>;
+	vcc_wifi: regulator-vcc-wifi {
+	compatible = "regulator-fixed";
+	regulator-name = "vcc-wifi";
+	/* Android 79 = Ubuntu 484 (GPIO9_7) */
+	gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>;
+	enable-active-high;
+	regulator-boot-on;
+	regulator-always-on;
 	};
 };
 
@@ -86,7 +82,18 @@
 &gpio8 {
 	status = "okay";
 };
+&gpio9 {
+	status = "okay";
+};
 
+&gpio10 {
+	status = "okay";
+};
+
+/* 如果 493 是绿灯，也要开启 gpio11 */
+&gpio11 {
+	status = "okay";
+};
 &emmc {
 	status = "okay";
 	num-slots = <1>;
@@ -104,27 +111,28 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	phy-handle = <&eth_phy1>;
-	phy-mode = "rmii";
+	phy-mode = "mii";
 
 	eth_phy1: phy@1 {
 		reg = <1>;
 	};
 };
 
-&sd0 {
-	bus-width = <4>;
-	cap-sd-highspeed;
+/* 开启 USB 2.0 PHY 1 */
+&usb2_phy1 {
 	status = "okay";
 };
 
-&sd2 {
+/* 开启该 PHY 下的端口（通常板载 WiFi 接在 port 1 或 port 2） */
+&usb2_phy1_port1 {
+	status = "okay";
+	/* 如果有特定的 VBUS 供电控制，可以引用你之前定义的 regulator */
+	/* vbus-supply = <&vcc_wifi>; */
+};
+
+&sd0 {
 	bus-width = <4>;
-	disable-wp;
-	broken-cd;
-	non-removable;
-	cap-power-off-card;
 	cap-sd-highspeed;
-	vmmc-supply = <&vcc_sdio2>;
 	status = "okay";
 };
 
@@ -146,6 +154,8 @@
 
 &xhci0 {
 	status = "okay";
+	phys = <&usb2_phy1_port1>;
+	phy-names = "usb2-phy";
 };
 
 &sata {
@@ -179,36 +189,24 @@
 		&range 37 1 2
 		&range 38 3 2  /* GPIO 6 */
 		&range 41 2 0
-		&range 43 3 2  /* SDIO2 */
 		&range 46 3 2  /* GPIO 7 */
 		&range 49 5 0  /* GPIO 7 */
 		&range 54 8 0  /* GPIO 8, skip 62-63 */
-		&range 64 7 1  /* GPIO 9 */
-		&range 72 6 1  /* GPIO 10, RGMII */
+		&range 64 8 0  /* GPIO 9 */
+		&range 72 8 0  /* GPIO 10 */
 		&range 78 1 0  /* GPIO */
-		&range 79 1 1  /* RGMII */
-		&range 80 6 1  /* GPIO 11, RGMII*/
-		&range 70 2 1  /* RGMII */
+		&range 80 8 0  /* GPIO 11 */
 		&range 88 8 0  /* GPIO 12 */
 	>;
 
 	pinctrl-names = "default";
 	pinctrl-0 = <
 		&emmc_pins_1
-		&emmc_pins_2
-		&emmc_pins_3
-		&emmc_pins_4
-		&i2c0_pmx_cfg
-		&gpio_pmx_cfg
-		&bt_uart2_p1_pmx_cfg
-		&bt_uart2_p2_pmx_cfg
-		&i2c2_p1_pmx_cfg
-		&i2c2_p2_pmx_cfg
-		&sdio0_p1_pmx0_cfg
-		&sdio0_p2_pmx0_cfg
-		&sdio0_p3_pmx0_cfg
-		&sdio2_p2_pmx0_cfg
-		&sdio2_p3_pmx0_cfg
+	    &emmc_pins_2
+	    &emmc_pins_3
+	    &emmc_pins_4
+	    &i2c0_pmx_cfg
+	    &gpio_pmx_cfg
 	>;
 };
 
