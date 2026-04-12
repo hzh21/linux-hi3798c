@@ -102,6 +102,20 @@
 	};
 };
 
+&sd0 {
+	bus-width = <4>;
+	cap-sd-highspeed;
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
 /* USB PHY 配置，用于板载 WiFi */
 &usb2_phy1 {
 	status = "okay";
@@ -112,7 +126,7 @@
 };
 
 &xhci0 {
-	status = "disabled";
+	status = "okay";
 	phys = <&usb2_phy1_port1>;
 	phy-names = "usb2-phy";
 };
