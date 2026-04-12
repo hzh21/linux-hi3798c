@@ -112,7 +112,7 @@
 };
 
 &xhci0 {
-	status = "okay";
+	status = "disabled";
 	phys = <&usb2_phy1_port1>;
 	phy-names = "usb2-phy";
 };
