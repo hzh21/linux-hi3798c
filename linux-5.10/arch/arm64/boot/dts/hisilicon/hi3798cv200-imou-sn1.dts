@@ -25,75 +25,59 @@
 	};
 
 	leds {
+		compatible = "gpio-leds";
+
 		/* 系统运行指示灯 - 蓝 */
-    system_ready {
-        label = "blue:power";
-        gpios = <&gpio9 0 GPIO_ACTIVE_LOW>; /* 对应 477 */
-        default-state = "on";
-    }
+		system_ready {
+			label = "blue:power";
+			gpios = <&gpio9 0 GPIO_ACTIVE_LOW>; /* 对应 477 */
+			default-state = "on";
+		};
 
-    /* 交互反馈灯 - 默认关闭，触发时闪烁 */
-    ir_feedback {
-        label = "blue:status";
-        gpios = <&gpio8 1 GPIO_ACTIVE_LOW>; /* 对应 472 的蓝色端 */
-        linux,default-trigger = "rc-feedback"; /* 绑定到遥控器反馈 */
-    }
+		/* 交互反馈灯 - 默认关闭，触发时闪烁 */
+		ir_feedback {
+			label = "blue:status";
+			gpios = <&gpio8 1 GPIO_ACTIVE_LOW>; /* 对应 472 的蓝色端 */
+			linux,default-trigger = "rc-feedback";
+		};
 
-    /* 启动提示灯 - 绿 */
-    boot_indicator {
-        label = "green:boot";
-        gpios = <&gpio11 0 GPIO_ACTIVE_HIGH>; /* 对应 493 */
-        default-state = "off";
-    };
-
-	
+		/* 启动提示灯 - 绿 */
+		boot_indicator {
+			label = "green:boot";
+			gpios = <&gpio11 0 GPIO_ACTIVE_HIGH>; /* 对应 493 */
+			default-state = "off";
+		};
 	};
 
 	vcc_sata: regulator-vcc-sata {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc-sata";
-		gpio = <&gpio10 7 GPIO_ACTIVE_HIGH>;
+		gpio = <&gpio10 7 GPIO_ACTIVE_HIGH>; /* 对应 492 */
 		enable-active-high;
+		regulator-boot-on;
 	};
 
 	vcc_wifi: regulator-vcc-wifi {
-	compatible = "regulator-fixed";
-	regulator-name = "vcc-wifi";
-	/* Android 79 = Ubuntu 484 (GPIO9_7) */
-	gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>;
-	enable-active-high;
-	regulator-boot-on;
-	regulator-always-on;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc-wifi";
+		/* Android 79 = Ubuntu 484 (GPIO9_7) */
+		gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
 	};
-};
+}; /* 根节点在此闭合 */
 
-&gpio2 {
-	status = "okay";
-};
+/* --- 以下是针对各个控制器的开启与配置 --- */
 
-&gpio3 {
-	status = "okay";
-};
+&gpio2 { status = "okay"; };
+&gpio3 { status = "okay"; };
+&gpio6 { status = "okay"; };
+&gpio8 { status = "okay"; };
+&gpio9 { status = "okay"; };
+&gpio10 { status = "okay"; };
+&gpio11 { status = "okay"; };
 
-&gpio6 {
-	status = "okay";
-};
-
-&gpio8 {
-	status = "okay";
-};
-&gpio9 {
-	status = "okay";
-};
-
-&gpio10 {
-	status = "okay";
-};
-
-/* 如果 493 是绿灯，也要开启 gpio11 */
-&gpio11 {
-	status = "okay";
-};
 &emmc {
 	status = "okay";
 	num-slots = <1>;
@@ -111,44 +95,19 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	phy-handle = <&eth_phy1>;
-	phy-mode = "mii";
+	phy-mode = "mii"; /* 百兆模式 */
 
 	eth_phy1: phy@1 {
 		reg = <1>;
 	};
 };
 
-/* 开启 USB 2.0 PHY 1 */
+/* USB PHY 配置，用于板载 WiFi */
 &usb2_phy1 {
 	status = "okay";
 };
 
-/* 开启该 PHY 下的端口（通常板载 WiFi 接在 port 1 或 port 2） */
 &usb2_phy1_port1 {
-	status = "okay";
-	/* 如果有特定的 VBUS 供电控制，可以引用你之前定义的 regulator */
-	/* vbus-supply = <&vcc_wifi>; */
-};
-
-&sd0 {
-	bus-width = <4>;
-	cap-sd-highspeed;
-	status = "okay";
-};
-
-&uart0 {
-	status = "okay";
-};
-
-&uart2 {
-	status = "okay";
-};
-
-&ohci {
-	status = "okay";
-};
-
-&ehci {
 	status = "okay";
 };
 
@@ -157,6 +116,9 @@
 	phys = <&usb2_phy1_port1>;
 	phy-names = "usb2-phy";
 };
+
+&ohci { status = "okay"; };
+&ehci { status = "okay"; };
 
 &sata {
 	status = "okay";
@@ -172,41 +134,29 @@
 
 &pmx0 {
 	pinctrl-single,gpio-range = <
-		&range 0  8 2  /* GPIO 0 */
-		&range 8  1 0  /* GPIO 1 */
-		&range 9  4 2
-		&range 13 1 0
-		&range 14 1 1
-		&range 15 1 0
-		&range 16 5 0  /* GPIO 2 */
-		&range 21 3 0
-		&range 24 4 0  /* GPIO 3 */
-		&range 28 2 2
-		&range 86 1 1
-		&range 87 1 0
-		&range 30 4 2  /* GPIO 4 */
-		&range 34 3 0
-		&range 37 1 2
-		&range 38 3 2  /* GPIO 6 */
-		&range 41 2 0
-		&range 46 3 2  /* GPIO 7 */
-		&range 49 5 0  /* GPIO 7 */
-		&range 54 8 0  /* GPIO 8, skip 62-63 */
-		&range 64 8 0  /* GPIO 9 */
-		&range 72 8 0  /* GPIO 10 */
-		&range 78 1 0  /* GPIO */
-		&range 80 8 0  /* GPIO 11 */
+		/* 将模式 1(RGMII) 和 2(SDIO) 占用的引脚全部释放为模式 0 (GPIO) */
+		&range 0  8 0  /* GPIO 0 */
+		&range 8  8 0  /* GPIO 1 */
+		&range 16 8 0  /* GPIO 2 */
+		&range 24 8 0  /* GPIO 3 */
+		&range 32 8 0  /* GPIO 4 */
+		&range 40 8 0  /* GPIO 5 */
+		&range 48 8 0  /* GPIO 6 */
+		&range 56 8 0  /* GPIO 7 */
+		&range 64 8 0  /* GPIO 9: 包含 LED(477) 和 WiFi电源(484) */
+		&range 72 8 0  /* GPIO 10: 包含 SATA电源(492) */
+		&range 80 8 0  /* GPIO 11: 包含绿灯(493) */
 		&range 88 8 0  /* GPIO 12 */
 	>;
 
 	pinctrl-names = "default";
 	pinctrl-0 = <
 		&emmc_pins_1
-	    &emmc_pins_2
-	    &emmc_pins_3
-	    &emmc_pins_4
-	    &i2c0_pmx_cfg
-	    &gpio_pmx_cfg
+		&emmc_pins_2
+		&emmc_pins_3
+		&emmc_pins_4
+		&i2c0_pmx_cfg
+		&gpio_pmx_cfg
+		/* 已剔除 SN1 专有的 SDIO 和 BT 引脚配置 */
 	>;
 };
-
