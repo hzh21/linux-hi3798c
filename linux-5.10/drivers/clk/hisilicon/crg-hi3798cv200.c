@@ -40,7 +40,7 @@
 #define HI3798CV200_COMBPHY0_MUX		86
 #define HI3798CV200_SDIO2_MUX			87
 
-#define HI3798CV200_CRG_NR_CLKS			128
+#define HI3798CV200_CRG_NR_CLKS			256
 
 static const struct hisi_fixed_rate_clock hi3798cv200_fixed_rate_clks[] = {
 	{ HISTB_OSC_CLK, "clk_osc", NULL, 0, 24000000, },
@@ -206,6 +206,16 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 		CLK_SET_RATE_PARENT, 0xb0, 19, 0 },
 	{ HISTB_USB3_SUSPEND_CLK1, "clk_u3_suspend1", NULL,
 		CLK_SET_RATE_PARENT, 0xb0, 18, 0 },
+/* --- 新增：为二哥 (XHCI1 / RTL8822BU) 补齐时钟图纸 --- */
+	{ 180, "clk_u3_1_bus", NULL,
+		CLK_SET_RATE_PARENT, 0xb8, 0, 0 },
+	{ 181, "clk_u3_1_utmi", NULL,
+		CLK_SET_RATE_PARENT, 0xb8, 4, 0 },
+	{ 182, "clk_u3_1_pipe", NULL,
+		CLK_SET_RATE_PARENT, 0xb8, 3, 0 },
+	{ 183, "clk_u3_1_suspend", NULL,
+		CLK_SET_RATE_PARENT, 0xb8, 2, 0 },
+	/* ------------------------------------------------ */
 	/* SATA */
 	{ HISTB_SATA_TX_CLK, "clk_sata_tx", NULL,
 		CLK_SET_RATE_PARENT, 0xa8, 3, 0 },
