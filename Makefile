@@ -3,18 +3,19 @@ KCFG ?= sn1-5.10.config
 CROSS_GCC ?= aarch64-linux-gnu-
 
 DTB := hisilicon/hi3798cv200-imou-sn1.dtb
-KVER = $(shell make -s kernel_version)
+
+# 🎯 核心修改 1：干掉原有的 Git 动态获取逻辑，强行焊死后缀
+FIXED_LOCALVERSION = -f425e7f
+
+# 🎯 核心修改 2：把强制后缀直接塞进底层编译命令里，神仙都改不掉！
+MAKE_ARCH = make -C $(KDIR) CROSS_COMPILE=$(CROSS_GCC) ARCH=arm64 LOCALVERSION="$(FIXED_LOCALVERSION)"
+
+# 注意：KVER 必须放在 MAKE_ARCH 定义之后，因为它依赖 MAKE_ARCH 来获取准确的版本号
+KVER = $(shell $(MAKE_ARCH) -s kernelrelease)
 
 CUR_DIR := $(shell pwd)
 STAGE_DIR := $(CUR_DIR)/stage
 OUTPUT_DIR := $(CUR_DIR)/output
-
-GIT_VER = $(shell git rev-parse --short=7 HEAD 2>/dev/null)
-ifneq ($(GIT_VER),)
-LOCALVERSION="-$(GIT_VER)"
-endif
-
-MAKE_ARCH = make -C $(KDIR) CROSS_COMPILE=$(CROSS_GCC) ARCH=arm64
 J=$(shell nproc)
 
 all: kernel modules
@@ -28,7 +29,7 @@ $(KDIR)/.config: $(KCFG)
 	$(MAKE_ARCH) olddefconfig
 
 kernel_version: $(KDIR)/.config
-	$(MAKE_ARCH) kernelrelease
+	@$(MAKE_ARCH) -s kernelrelease
 
 kernel: $(KDIR)/.config
 	@echo "Kernel source dir: $(KDIR)"
@@ -46,4 +47,3 @@ kernel_clean:
 clean: kernel_clean
 	rm -rf $(STAGE_DIR)
 	rm -rf $(OUTPUT_DIR)
-
