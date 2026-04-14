@@ -13,6 +13,7 @@
 #include "clk.h"
 #include "crg.h"
 #include "reset.h"
+#include <linux/io.h>
 
 /* hi3798CV200 core CRG */
 #define HI3798CV200_INNER_CLK_OFFSET		64
@@ -378,10 +379,22 @@ MODULE_DEVICE_TABLE(of, hi3798cv200_crg_match_table);
 static int hi3798cv200_crg_probe(struct platform_device *pdev)
 {
 	struct hisi_crg_dev *crg;
+	void __iomem *base;  // 🎯 新增：用于临时映射物理内存的指针
 
 	crg = devm_kmalloc(&pdev->dev, sizeof(*crg), GFP_KERNEL);
 	if (!crg)
 		return -ENOMEM;
+
+	/* ========================================================= */
+	/* 🎯 终极核弹补丁：在时钟控制器加载的第一秒，强行开启二哥的 PHY 总闸！ */
+	base = of_iomap(pdev->dev.of_node, 0);
+	if (base) {
+		u32 val = readl(base + 0xbc);      // 第一步：先读出现有的状态（保护 U 盘的时钟）
+		val |= 0x00000005;                 // 第二步：做按位或运算，强行塞入 0x05
+		writel(val, base + 0xbc);          // 第三步：安全写回！
+		iounmap(base);
+	}
+	/* ========================================================= */
 
 	crg->funcs = of_device_get_match_data(&pdev->dev);
 	if (!crg->funcs)
