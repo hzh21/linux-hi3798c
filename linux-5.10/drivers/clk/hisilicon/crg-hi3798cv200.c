@@ -13,6 +13,7 @@
 #include "clk.h"
 #include "crg.h"
 #include "reset.h"
+#include <linux/of_address.h>
 #include <linux/io.h>
 
 /* hi3798CV200 core CRG */
