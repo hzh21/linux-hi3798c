@@ -388,6 +388,12 @@ static int hi3798cv200_crg_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, crg);
+	/* 强行复刻 U-Boot 的通关密码 */
+    void __iomem *base = ioremap(0xf8a20000, 0x1000);
+    if (base) {
+        writel(0x00a11041, base + 0xcc);
+        iounmap(base);
+    }
 	return 0;
 }
 
