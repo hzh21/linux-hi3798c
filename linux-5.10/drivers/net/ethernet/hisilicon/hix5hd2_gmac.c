@@ -13,6 +13,7 @@
 #include <linux/reset.h>
 #include <linux/clk.h>
 #include <linux/circ_buf.h>
+#include <linux/io.h> 
 
 #define STATION_ADDR_LOW		0x0000
 #define STATION_ADDR_HIGH		0x0004
@@ -1265,7 +1266,18 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		netdev_err(ndev, "register_netdev failed!");
 		goto out_destroy_queue;
 	}
-
+	/* --- S10 终极补丁：强行复刻 U-Boot 时钟与复位状态 --- */
+	{
+		void __iomem *s10_crg_base;
+		/* 使用 U-Boot 源码中定义的基地址 0xF8A22000 */
+		s10_crg_base = ioremap(0xf8a22000, 0x1000); 
+		if (s10_crg_base) {
+			/* 写入 U-Boot 实测成功的通关密码 */
+			writel(0x00a11041, s10_crg_base + 0xcc); 
+			pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 after register\n");
+			iounmap(s10_crg_base);
+		}
+	}
 	clk_disable_unprepare(priv->mac_ifc_clk);
 	clk_disable_unprepare(priv->mac_core_clk);
 
