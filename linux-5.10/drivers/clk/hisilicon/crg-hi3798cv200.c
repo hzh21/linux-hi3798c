@@ -368,6 +368,7 @@ MODULE_DEVICE_TABLE(of, hi3798cv200_crg_match_table);
 static int hi3798cv200_crg_probe(struct platform_device *pdev)
 {
 	struct hisi_crg_dev *crg;
+	void __iomem *base; // 修正：变量声明移至顶部
 
 	crg = devm_kmalloc(&pdev->dev, sizeof(*crg), GFP_KERNEL);
 	if (!crg)
@@ -388,12 +389,15 @@ static int hi3798cv200_crg_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, crg);
-	/* 强行复刻 U-Boot 的通关密码 */
-    void __iomem *base = ioremap(0xf8a20000, 0x1000);
-    if (base) {
-        writel(0x00a11041, base + 0xcc);
-        iounmap(base);
-    }
+
+	/* --- S10 硬件兼容性修复：强制复刻 U-Boot 时钟配置 --- */
+	base = ioremap(0xf8a20000, 0x1000); // 确保基地址与 dtsi 中的 8a22000 范围一致 [cite: 55]
+	if (base) {
+		writel(0x00a11041, base + 0xcc); // 强制写入 U-Boot 验证通过的通关密码
+		pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 for RMII\n");
+		iounmap(base);
+	}
+
 	return 0;
 }
 
