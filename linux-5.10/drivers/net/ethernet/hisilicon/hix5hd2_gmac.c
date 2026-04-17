@@ -841,14 +841,7 @@ static int hix5hd2_net_open(struct net_device *dev)
 	}
 
 	ret = clk_prepare_enable(priv->mac_ifc_clk);
-	/* --- 在这里强插：因为 clk_enable 会把寄存器设为 0190C001 --- */
-    s10_final_crg = ioremap(0xf8a20000, 0x1000);
-    if (s10_final_crg) {
-        writel(0x00a11041, s10_final_crg + 0xcc);
-        pr_info("S10 FINAL FIX: ETH1_CLK forced to 0x00a11041 in net_open\n");
-        iounmap(s10_final_crg);
-    }
-    /* ------------------------------------------------------- */
+	
 	if (ret < 0) {
 		clk_disable_unprepare(priv->mac_core_clk);
 		netdev_err(dev, "failed to enable mac ifc clk %d\n", ret);
@@ -875,7 +868,14 @@ static int hix5hd2_net_open(struct net_device *dev)
 
 	hix5hd2_port_enable(priv);
 	hix5hd2_irq_enable(priv);
-
+	/* --- 在这里强插：因为 clk_enable 会把寄存器设为 0190C001 --- */
+    s10_final_crg = ioremap(0xf8a20000, 0x1000);
+    if (s10_final_crg) {
+        writel(0x00a11041, s10_final_crg + 0xcc);
+        pr_info("S10 FINAL FIX: ETH1_CLK forced to 0x00a11041 in net_open\n");
+        iounmap(s10_final_crg);
+    }
+    /* ------------------------------------------------------- */
 	return 0;
 }
 
