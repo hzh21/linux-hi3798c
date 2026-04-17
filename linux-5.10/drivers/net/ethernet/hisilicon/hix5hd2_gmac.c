@@ -464,6 +464,22 @@ static void hix5hd2_adjust_link(struct net_device *dev)
 		hix5hd2_config_port(dev, phy->speed, phy->duplex);
 		phy_print_status(phy);
 	}
+	/* * ==========================================================
+	 * S10 终极绝杀：无论 CCF 刚才怎么乱改，我在这里拿下最后的话语权！
+	 * ==========================================================
+	 */
+	{
+		void __iomem *s10_lock_crg = ioremap(0xf8a20000, 0x1000);
+		if (s10_lock_crg) {
+			/* 检查当前寄存器的值，如果不是安卓原厂真理 1A8，就强行纠正它 */
+			/* 注意：这里必须是原厂确定的 0x000001A8，千万不要写成 0x00a11041 啦！ */
+			if (readl(s10_lock_crg + 0xcc) != 0x000001A8) {
+				writel(0x000001A8, s10_lock_crg + 0xcc);
+				pr_info("S10 Fix: Deadlock 0xcc to 0x000001A8 in adjust_link!\n");
+			}
+			iounmap(s10_lock_crg);
+		}
+	}
 }
 
 static void hix5hd2_rx_refill(struct hix5hd2_priv *priv)
@@ -832,7 +848,6 @@ static int hix5hd2_net_open(struct net_device *dev)
 	struct hix5hd2_priv *priv = netdev_priv(dev);
 	struct phy_device *phy;
 	int ret;
-	void __iomem *s10_final_crg; // 新增变量
 
 	ret = clk_prepare_enable(priv->mac_core_clk);
 	if (ret < 0) {
@@ -868,14 +883,6 @@ static int hix5hd2_net_open(struct net_device *dev)
 
 	hix5hd2_port_enable(priv);
 	hix5hd2_irq_enable(priv);
-	/* --- 在这里强插：因为 clk_enable 会把寄存器设为 0190C001 --- */
-    s10_final_crg = ioremap(0xf8a20000, 0x1000);
-    if (s10_final_crg) {
-        writel(0x00a11041, s10_final_crg + 0xcc);
-        pr_info("S10 FINAL FIX: ETH1_CLK forced to 0x00a11041 in net_open\n");
-        iounmap(s10_final_crg);
-    }
-    /* ------------------------------------------------------- */
 	return 0;
 }
 
