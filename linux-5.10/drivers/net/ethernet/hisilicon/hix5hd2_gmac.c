@@ -1294,7 +1294,7 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		s10_crg_base = ioremap(0xf8a20000, 0x1000); 
 		if (s10_crg_base) {
 			/* 强制写入 U-Boot 的通关密码 0x00a11041 到偏移 0xcc */
-			writel(0x00a11041, s10_crg_base + 0xcc); 
+			writel(0x000001A8, s10_crg_base + 0xcc); 
 			pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 using 0xf8a20000 base\n");
 			iounmap(s10_crg_base);
 		}
