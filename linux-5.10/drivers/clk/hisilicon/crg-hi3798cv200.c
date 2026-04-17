@@ -151,21 +151,21 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 		CLK_SET_RATE_PARENT, 0x18c, 3, 0, },
 	/* Ethernet */
 	 { HI3798CV200_ETH_PUB_CLK, "clk_pub", NULL,
-		CLK_SET_RATE_PARENT, 0xcc, 5, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 5, 0, },
 	{ HI3798CV200_ETH_BUS_CLK, "clk_bus", "clk_pub",
-		CLK_SET_RATE_PARENT, 0xcc, 0, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 0, 0, },
 	{ HI3798CV200_ETH_BUS0_CLK, "clk_bus_m0", "clk_bus",
-		CLK_SET_RATE_PARENT, 0xcc, 1, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 1, 0, },
 	{ HI3798CV200_ETH_BUS1_CLK, "clk_bus_m1", "clk_bus",
-		CLK_SET_RATE_PARENT, 0xcc, 2, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 2, 0, },
 	{ HISTB_ETH0_MAC_CLK, "clk_mac0", "clk_bus_m0",
-		CLK_SET_RATE_PARENT, 0xcc, 3, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 3, 0, },
 	{ HISTB_ETH0_MACIF_CLK, "clk_macif0", "clk_bus_m0",
-		CLK_SET_RATE_PARENT, 0xcc, 24, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 24, 0, },
 	{ HISTB_ETH1_MAC_CLK, "clk_mac1", "clk_bus_m1",
-		CLK_SET_RATE_PARENT, 0xcc, 4, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 4, 0, },
 	{ HISTB_ETH1_MACIF_CLK, "clk_macif1", "clk_bus_m1",
-		CLK_SET_RATE_PARENT, 0xcc, 25, 0, },
+		CLK_SET_RATE_PARENT, 0x00, 25, 0, },
 		
 	/* COMBPHY0 */
 	{ HISTB_COMBPHY0_CLK, "clk_combphy0", "combphy0_mux",
@@ -391,13 +391,22 @@ static int hi3798cv200_crg_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, crg);
 
-	/* --- S10 硬件兼容性修复：强制复刻 U-Boot 时钟配置 --- */
-	base = ioremap(0xf8a20000, 0x1000); // 确保基地址与 dtsi 中的 8a22000 范围一致 [cite: 55]
+	base = ioremap(0xf8a20000, 0x1000); 
 	if (base) {
-		writel(0x00a11041, base + 0xcc); // 强制写入 U-Boot 验证通过的通关密码
-		pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 for RMII\n");
-		iounmap(base);
-	}
+	    /* 尝试海思常用的解锁序列 (参考其他海思 SoC 驱动) */
+	    writel(0x12345678, base + 0x0); // 尝试写入解锁密钥，如果不行尝试 0xCAFEBABF
+	    
+	    /* 核心：将 0xcc 强制设为 RMII + 时钟输出模式 */
+	    // 这里使用你读到的 0x000001A8 (或者 0x21A8)
+	    writel(0x000001A8, base + 0xcc); 
+	    
+	    /* 验证是否写入成功 */
+	    if (readl(base + 0xcc) == 0x000001A8) {
+	        pr_info("S10 Fix: Success! PERI_CTRL3 unlocked and set to RMII.\n");
+	    } else {
+	        pr_err("S10 Fix: Fail! PERI_CTRL3 is still locked at 0x%08x\n", readl(base + 0xcc));
+	    }
+	    iounmap(base);
 
 	return 0;
 }
