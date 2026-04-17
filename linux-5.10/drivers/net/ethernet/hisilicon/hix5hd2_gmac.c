@@ -1152,6 +1152,8 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto out_free_netdev;
 	}
+	/* --- S10 斩断 Regmap 羁绊 1：设为空指针 --- */
+	priv->mac_core_clk = NULL; 
 
 	ret = clk_prepare_enable(priv->mac_core_clk);
 	if (ret < 0) {
@@ -1162,6 +1164,8 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	priv->mac_ifc_clk = devm_clk_get(&pdev->dev, "mac_ifc");
 	if (IS_ERR(priv->mac_ifc_clk))
 		priv->mac_ifc_clk = NULL;
+	/* --- S10 斩断 Regmap 羁绊 2 --- */
+	priv->mac_ifc_clk = NULL;
 
 	ret = clk_prepare_enable(priv->mac_ifc_clk);
 	if (ret < 0) {
@@ -1172,11 +1176,15 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	priv->mac_core_rst = devm_reset_control_get(dev, "mac_core");
 	if (IS_ERR(priv->mac_core_rst))
 		priv->mac_core_rst = NULL;
+	/* --- S10 斩断 Regmap 羁绊 3 --- */
+	priv->mac_core_rst = NULL;
 	hix5hd2_mac_core_reset(priv);
 
 	priv->mac_ifc_rst = devm_reset_control_get(dev, "mac_ifc");
 	if (IS_ERR(priv->mac_ifc_rst))
 		priv->mac_ifc_rst = NULL;
+	/* --- S10 斩断 Regmap 羁绊 4 --- */
+	priv->mac_ifc_rst = NULL;
 
 	priv->phy_rst = devm_reset_control_get(dev, "phy");
 	if (IS_ERR(priv->phy_rst)) {
@@ -1188,6 +1196,9 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 						 DELAYS_NUM);
 		if (ret)
 			goto out_disable_clk;
+		
+		/* --- S10 斩断 Regmap 羁绊 5 --- */
+		priv->phy_rst = NULL;
 		hix5hd2_phy_reset(priv);
 	}
 
@@ -1275,18 +1286,20 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		netdev_err(ndev, "register_netdev failed!");
 		goto out_destroy_queue;
 	}
+
 	/* --- S10 终极补丁：强行复刻 U-Boot 时钟与复位状态 --- */
 	{
 		void __iomem *s10_crg_base;
-	    /* 修正地址：使用 0xf8a20000 作为基准 */
-	    s10_crg_base = ioremap(0xf8a20000, 0x1000); 
-	    if (s10_crg_base) {
-	        /* 强制写入 U-Boot 的通关密码 0x00a11041 到偏移 0xcc */
-	        writel(0x00a11041, s10_crg_base + 0xcc); 
-	        pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 using 0xf8a20000 base\n");
-	        iounmap(s10_crg_base);
-    	}
+		/* 修正地址：使用 0xf8a20000 作为基准 */
+		s10_crg_base = ioremap(0xf8a20000, 0x1000); 
+		if (s10_crg_base) {
+			/* 强制写入 U-Boot 的通关密码 0x00a11041 到偏移 0xcc */
+			writel(0x00a11041, s10_crg_base + 0xcc); 
+			pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 using 0xf8a20000 base\n");
+			iounmap(s10_crg_base);
+		}
 	}
+
 	clk_disable_unprepare(priv->mac_ifc_clk);
 	clk_disable_unprepare(priv->mac_core_clk);
 
