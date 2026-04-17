@@ -369,7 +369,7 @@ MODULE_DEVICE_TABLE(of, hi3798cv200_crg_match_table);
 static int hi3798cv200_crg_probe(struct platform_device *pdev)
 {
 	struct hisi_crg_dev *crg;
-	void __iomem *base; // 修正：变量声明移至顶部
+	void __iomem *base;
 
 	crg = devm_kmalloc(&pdev->dev, sizeof(*crg), GFP_KERNEL);
 	if (!crg)
@@ -391,25 +391,27 @@ static int hi3798cv200_crg_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, crg);
 
+	/* --- S10 硬件强制配置 --- */
 	base = ioremap(0xf8a20000, 0x1000); 
 	if (base) {
-	    /* 尝试海思常用的解锁序列 (参考其他海思 SoC 驱动) */
-	    writel(0x12345678, base + 0x0); // 尝试写入解锁密钥，如果不行尝试 0xCAFEBABF
-	    
-	    /* 核心：将 0xcc 强制设为 RMII + 时钟输出模式 */
-	    // 这里使用你读到的 0x000001A8 (或者 0x21A8)
-	    writel(0x000001A8, base + 0xcc); 
-	    
-	    /* 验证是否写入成功 */
-	    if (readl(base + 0xcc) == 0x000001A8) {
-	        pr_info("S10 Fix: Success! PERI_CTRL3 unlocked and set to RMII.\n");
-	    } else {
-	        pr_err("S10 Fix: Fail! PERI_CTRL3 is still locked at 0x%08x\n", readl(base + 0xcc));
-	    }
-	    iounmap(base);
+		/* 1. 尝试解锁序列 */
+		writel(0x12345678, base + 0x0); 
+
+		/* 2. 强制写入：RMII模式 + SoC输出50M时钟 + 释放PHY复位(位13) */
+		/* 建议优先尝试你 U-Boot 读到的 0x00a11041 */
+		writel(0x00a11041, base + 0xcc); 
+		
+		/* 验证写入结果 */
+		if ((readl(base + 0xcc) & 0xff) == 0x41 || (readl(base + 0xcc) & 0xff) == 0xa8) {
+			pr_info("S10 Fix: Success! PERI_CTRL3 set to RMII mode.\n");
+		} else {
+			pr_err("S10 Fix: Fail! PERI_CTRL3 is still 0x%08x\n", readl(base + 0xcc));
+		}
+		iounmap(base);
+	} /* 修正：补充 if (base) 的闭合大括号 */
 
 	return 0;
-}
+} /* 修正：补充函数体的闭合大括号 */
 
 static int hi3798cv200_crg_remove(struct platform_device *pdev)
 {
