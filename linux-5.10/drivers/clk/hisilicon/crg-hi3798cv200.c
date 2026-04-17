@@ -150,7 +150,7 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 	{ HISTB_PCIE_AUX_CLK, "clk_pcie_aux", "24m",
 		CLK_SET_RATE_PARENT, 0x18c, 3, 0, },
 	/* Ethernet */
-	{ HI3798CV200_ETH_PUB_CLK, "clk_pub", NULL,
+	/* { HI3798CV200_ETH_PUB_CLK, "clk_pub", NULL,
 		CLK_SET_RATE_PARENT, 0xcc, 5, 0, },
 	{ HI3798CV200_ETH_BUS_CLK, "clk_bus", "clk_pub",
 		CLK_SET_RATE_PARENT, 0xcc, 0, 0, },
@@ -166,6 +166,7 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 		CLK_SET_RATE_PARENT, 0xcc, 4, 0, },
 	{ HISTB_ETH1_MACIF_CLK, "clk_macif1", "clk_bus_m1",
 		CLK_SET_RATE_PARENT, 0xcc, 25, 0, },
+		*/
 	/* COMBPHY0 */
 	{ HISTB_COMBPHY0_CLK, "clk_combphy0", "combphy0_mux",
 		CLK_SET_RATE_PARENT, 0x188, 0, 0, },
