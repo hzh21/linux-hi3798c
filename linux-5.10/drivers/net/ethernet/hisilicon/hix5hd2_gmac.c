@@ -156,6 +156,8 @@
 #define RGMII_SPEED_1000		0x2c
 #define RGMII_SPEED_100			0x2f
 #define RGMII_SPEED_10			0x2d
+#define RMII_SPEED_100          0x01  // 根据 GMAC 逻辑，百兆通常对应 0x01
+#define RMII_MODE_BIT           BIT(7) // 对应 .reg 中的 0x80
 #define MII_SPEED_100			0x0f
 #define MII_SPEED_10			0x0d
 #define GMAC_SPEED_1000			0x05
@@ -302,34 +304,48 @@ static void hix5hd2_config_port(struct net_device *dev, u32 speed, u32 duplex)
 		else
 			val = RGMII_SPEED_10;
 		break;
-	case PHY_INTERFACE_MODE_RMII:
 	case PHY_INTERFACE_MODE_MII:
 		if (speed == SPEED_100)
 			val = MII_SPEED_100;
 		else
 			val = MII_SPEED_10;
 		break;
-	default:
-		netdev_warn(dev, "not supported mode\n");
-		val = MII_SPEED_10;
-		break;
-	}
+	/* 新增 RMII 支持分支 */
+    case PHY_INTERFACE_MODE_RMII:
+        // 根据 .reg 数据 0xf9843010 写 0x80 (RMII_MODE_BIT)
+        // 同时根据速率选择控制值
+        val = RMII_MODE_BIT; 
+        if (speed == SPEED_100)
+            val |= RMII_SPEED_100;
+        // 注意：这里写入的是控制接口模式的寄存器 (0xf9843010)
+        break;
+    default:
+        netdev_warn(dev, "not supported mode\n");
+        val = MII_SPEED_10;
+        break;
+    }
 
-	if (duplex)
-		val |= GMAC_FULL_DUPLEX;
-	writel_relaxed(val, priv->ctrl_base);
-	hix5hd2_mac_interface_reset(priv);
+    if (duplex)
+        val |= GMAC_FULL_DUPLEX;
 
-	writel_relaxed(BIT_MODE_CHANGE_EN, priv->base + MODE_CHANGE_EN);
-	if (speed == SPEED_1000)
-		val = GMAC_SPEED_1000;
-	else if (speed == SPEED_100)
-		val = GMAC_SPEED_100;
-	else
-		val = GMAC_SPEED_10;
-	writel_relaxed(val, priv->base + PORT_MODE);
-	writel_relaxed(0, priv->base + MODE_CHANGE_EN);
-	writel_relaxed(duplex, priv->base + MAC_DUPLEX_HALF_CTRL);
+    /* 写入接口控制寄存器 (DTS 中的第二个 reg 地址) */
+    writel_relaxed(val, priv->ctrl_base);
+    
+    /* 触发硬件接口复位以使配置生效 */
+    hix5hd2_mac_interface_reset(priv);
+
+    /* 以下是配置 MAC 内部运行模式 */
+    writel_relaxed(BIT_MODE_CHANGE_EN, priv->base + MODE_CHANGE_EN);
+    if (speed == SPEED_1000)
+        val = GMAC_SPEED_1000;
+    else if (speed == SPEED_100)
+        val = GMAC_SPEED_100;
+    else
+        val = GMAC_SPEED_10;
+    
+    writel_relaxed(val, priv->base + PORT_MODE);
+    writel_relaxed(0, priv->base + MODE_CHANGE_EN);
+    writel_relaxed(duplex, priv->base + MAC_DUPLEX_HALF_CTRL);
 }
 
 static void hix5hd2_set_desc_depth(struct hix5hd2_priv *priv, int rx, int tx)
@@ -1232,7 +1248,10 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		netdev_err(ndev, "not find phy-mode\n");
 		goto err_mdiobus;
 	}
-
+	/* 增加一个简单的校验逻辑，确保内核支持 RMII */
+	if (priv->phy_mode == PHY_INTERFACE_MODE_RMII) {
+	    netdev_info(ndev, "configuring for RMII mode (S10 specific)\n");
+	}
 	priv->phy_node = of_parse_phandle(node, "phy-handle", 0);
 	if (!priv->phy_node) {
 		netdev_err(ndev, "not find phy-handle\n");
@@ -1294,19 +1313,41 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		goto out_destroy_queue;
 	}
 
-	/* --- S10 终极补丁：强行复刻 U-Boot 时钟与复位状态 --- */
-	{
-		void __iomem *s10_crg_base;
-		/* 修正地址：使用 0xf8a20000 作为基准 */
-		s10_crg_base = ioremap(0xf8a20000, 0x1000); 
-		if (s10_crg_base) {
-			/* 强制写入 U-Boot 的通关密码 0x00a11041 到偏移 0xcc */
-			writel(0x000001A8, s10_crg_base + 0xcc); 
-			pr_info("S10 Fix: Force ETH1_CLK (0xcc) to 0x00a11041 using 0xf8a20000 base\n");
-			iounmap(s10_crg_base);
-		}
-	}
+	/* --- S10 终极补丁：复刻原厂 .reg Module 19 初始化 --- */
+{
+    void __iomem *s10_sys_ctrl;
+    void __iomem *s10_iocfg_base;
+    u32 val;
 
+    /* 1. 配置 RMII 模式与时钟开关 (0xf9843010) */
+    s10_sys_ctrl = ioremap(0xf9843000, 0x20);
+    if (s10_sys_ctrl) {
+        // 先按 .reg 逻辑清理 0xf984300c (掩码 0xe0)
+        val = readl(s10_sys_ctrl + 0x0c);
+        val &= ~0xe0;
+        writel(val, s10_sys_ctrl + 0x0c);
+
+        // 设置 0xf9843010 为 0x80 (Bit 7=1 开启 RMII)
+        val = readl(s10_sys_ctrl + 0x10);
+        val &= ~0xe0;
+        val |= 0x80; 
+        writel(val, s10_sys_ctrl + 0x10);
+        
+        pr_info("S10 Fix: RMII mode set (0xf9843010 = 0x80)\n");
+        iounmap(s10_sys_ctrl);
+    }
+
+    /* 2. 强制修复 Pinmux 引脚复用 (0xf80000a8, 0xf80000ac) */
+    s10_iocfg_base = ioremap(0xf8000000, 0x200);
+    if (s10_iocfg_base) {
+        // 根据 .reg 计算出的合并值填入
+        writel(0x0101ffff, s10_iocfg_base + 0xa8); 
+        writel(0xffffffff, s10_iocfg_base + 0xac);
+        
+        pr_info("S10 Fix: Pinmux forced for RMII (0xa8=0x0101ffff, 0xac=0xffffffff)\n");
+        iounmap(s10_iocfg_base);
+    }
+}
 	clk_disable_unprepare(priv->mac_ifc_clk);
 	clk_disable_unprepare(priv->mac_core_clk);
 
