@@ -1,18 +1,16 @@
 /dts-v1/;
-/memreserve/ 0x00000000 0x04080000;
-/* reserved for bootloader */
 
 #include <dt-bindings/gpio/gpio.h>
 #include "hi3798cv200.dtsi"
 #include "poplar-pinctrl.dtsi"
 
 / {
-	model = "is-s10";
-	compatible = "is,s10", "hisilicon,hi3798cv200";
+	model = "S10-TVBox";
+	compatible = "hisilicon,hi3798cv200";
 
 	aliases {
 		serial0 = &uart0;
-		serial2 = &uart2;
+		sata0 = &sata;
 	};
 
 	chosen {
@@ -21,107 +19,58 @@
 
 	memory@0 {
 		device_type = "memory";
-		reg = <0x0 0x0 0x0 0x80000000>;
+		reg = <0x0 0x0 0x0 0x80000000>; /* 2GB RAM */
 	};
 
-	leds {
-		compatible = "gpio-leds";
-
-		/* 系统运行指示灯 - 蓝 */
-		system_ready {
-			label = "blue:power";
-			gpios = <&gpio9 0 GPIO_ACTIVE_LOW>; /* 对应 477 */
-			default-state = "on";
-		};
-
-		/* 交互反馈灯 - 默认关闭，触发时闪烁 */
-		ir_feedback {
-			label = "blue:status";
-			gpios = <&gpio8 1 GPIO_ACTIVE_LOW>; /* 对应 472 的蓝色端 */
-			linux,default-trigger = "rc-feedback";
-		};
-
-		/* 启动提示灯 - 绿 */
-		boot_indicator {
-			label = "green:boot";
-			gpios = <&gpio11 0 GPIO_ACTIVE_HIGH>; /* 对应 493 */
-			default-state = "off";
-		};
-	};
-
+	/* 定义 SATA 硬盘电源 */
 	vcc_sata: regulator-vcc-sata {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc-sata";
-		gpio = <&gpio10 7 GPIO_ACTIVE_HIGH>; /* 对应 492 */
+		gpio = <&gpio9 4 GPIO_ACTIVE_HIGH>; /* 你测得的 492 */
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
 		enable-active-high;
-		regulator-boot-on;
-	};
-
-	vcc_wifi: regulator-vcc-wifi {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc-wifi";
-		/* Android 79 = Ubuntu 484 (GPIO9_7) */
-		gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-boot-on;
 		regulator-always-on;
 	};
-}; /* 根节点在此闭合 */
 
-/* --- 以下是针对各个控制器的开启与配置 --- */
+	/* 定义其他必须拉高的 GPIO (72 和 79) */
+	vcc_pwr_extra: regulator-vcc-extra {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc-extra";
+		/* 我们可以用一个 dummy 节点或者在 pinctrl 里处理，
+		   这里用 regulator 方式最稳妥 */
+		gpio = <&gpio9 0 GPIO_ACTIVE_HIGH>; /* Android 下的 72 */
+		enable-active-high;
+		regulator-always-on;
+	};
 
-&gpio0 {
+	vcc_pwr_extra2: regulator-vcc-extra2 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc-extra2";
+		gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>; /* Android 下的 79 */
+		enable-active-high;
+		regulator-always-on;
+	};
+};
+
+&uart0 {
 	status = "okay";
 };
 
-&gpio1 {
+/* SATA 配置 */
+&sata {
 	status = "okay";
+	target-supply = <&vcc_sata>;
 };
 
-&gpio2 {
+&combphy1 {
 	status = "okay";
+	assigned-clocks = <&crg 80>;
+	assigned-clock-parents = <&crg 66>;
+	assigned-clock-rates = <25000000>;
 };
 
-&gpio3 {
-	status = "okay";
-};
-
-&gpio4 {
-	status = "okay";
-};
-
-&gpio5 {
-	status = "okay";
-};
-
-&gpio6 {
-	status = "okay";
-};
-
-&gpio7 {
-	status = "okay";
-};
-
-&gpio8 {
-	status = "okay";
-};
-
-&gpio9 {
-	status = "okay";
-};
-
-&gpio10 {
-	status = "okay";
-};
-
-&gpio11 {
-	status = "okay";
-};
-
-&gpio12 {
-	status = "okay";
-};
-
+/* eMMC 配置 */
 &emmc {
 	status = "okay";
 	num-slots = <1>;
@@ -134,74 +83,23 @@
 	bus-width = <8>;
 };
 
+/* SD卡配置 */
+&sd0 {
+	status = "okay";
+	bus-width = <4>;
+	cap-sd-highspeed;
+};
+
+/* 网络配置 (RMII, PHY ID 1) */
 &gmac1 {
 	status = "okay";
 	#address-cells = <1>;
 	#size-cells = <0>;
 	phy-handle = <&eth_phy1>;
-	phy-mode = "mii"; /* 百兆模式 */
+	phy-mode = "rmii";
+	hisilicon,phy-reset-delays-us = <30000 30000 50000>;
 
 	eth_phy1: phy@1 {
 		reg = <1>;
 	};
-};
-
-&sd0 {
-	bus-width = <4>;
-	cap-sd-highspeed;
-	status = "okay";
-};
-
-&uart0 {
-	status = "okay";
-};
-
-&uart2 {
-	status = "okay";
-};
-
-/* USB PHY 配置，用于板载 WiFi */
-&usb2_phy1 {
-	status = "okay";
-};
-
-&usb2_phy1_port1 {
-	status = "okay";
-};
-
-&xhci0 {
-	status = "okay";
-};
-
-&ohci { status = "okay"; };
-&ehci { status = "okay"; };
-
-&sata {
-	status = "okay";
-	target-supply = <&vcc_sata>;
-};
-
-&combphy1 {
-	sata-controller = <&sata>;
-	assigned-clocks = <&crg 80>;
-	assigned-clock-parents = <&crg 66>;
-	assigned-clock-rates = <25000000>;
-};
-
-&pmx0 {
-	pinctrl-single,gpio-range = <
-		&range 0  8 2  /* 【关键】恢复模式 2，保住 UART0 串口输出 */
-		&range 8  92 0
-	>;
-
-	pinctrl-names = "default";
-	pinctrl-0 = <
-		&emmc_pins_1
-		&emmc_pins_2
-		&emmc_pins_3
-		&emmc_pins_4
-		&i2c0_pmx_cfg
-		&gpio_pmx_cfg
-		/* 已剔除 SN1 专有的 SDIO 和 BT 引脚配置 */
-	>;
 };
