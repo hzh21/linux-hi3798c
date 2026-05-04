@@ -1223,24 +1223,51 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	}
 
 	/* ========================================================
-	 * S10 终极暴力防呆补丁：无视一切解析错误，强制贯通硬件！
+	 * S10 终极暴力防呆补丁：砸锁、切协议、焊死物理引脚！
 	 * ======================================================== */
 	{
 		void __iomem *peri_ctrl = ioremap(0xf8a20000, 0x1000);
 		void __iomem *gmac_syscon = ioremap(0xf9843000, 0x20);
+		void __iomem *pinmux = ioremap(0xf8a21000, 0x100); /* 新增：物理管脚复用控制器 */
 		u32 val;
 
+		/* 第一步：强行焊死 18 根物理引脚，铺通 RMII 数据和时钟的高速公路 */
+		if (pinmux) {
+			writel(0x00000130, pinmux + 0x38);
+			writel(0x00000131, pinmux + 0x54);
+			writel(0x00000131, pinmux + 0x58);
+			writel(0x00000131, pinmux + 0x5c);
+			writel(0x00000121, pinmux + 0x60);
+			writel(0x00000131, pinmux + 0x64);
+			writel(0x00000132, pinmux + 0x68);
+			writel(0x00000130, pinmux + 0x6c);
+			writel(0x00000132, pinmux + 0x70);
+			writel(0x00000132, pinmux + 0x74);
+			writel(0x00000132, pinmux + 0x78);
+			writel(0x00000132, pinmux + 0x7c);
+			writel(0x00000132, pinmux + 0x80);
+			writel(0x00000172, pinmux + 0x84);
+			writel(0x00000170, pinmux + 0x88);
+			writel(0x00000170, pinmux + 0x8c);
+			writel(0x00000170, pinmux + 0x90);
+			writel(0x00000172, pinmux + 0x94);
+			pr_emerg("!!! S10 FIX: PINMUX FORCED TO RMII MODE !!!\n");
+			iounmap(pinmux);
+		}
+
+		/* 第二步：破解海思硬件写保护，放下物理吊桥 */
 		if (peri_ctrl) {
-			writel(0x12345678, peri_ctrl + 0x0);  /* 第一步：破解海思硬件写保护！ */
-			writel(0x0190C001, peri_ctrl + 0xcc); /* 第二步：强行放下 RMII 物理吊桥，接通时钟！ */
+			writel(0x12345678, peri_ctrl + 0x0);  
+			writel(0x0190C001, peri_ctrl + 0xcc); 
 			pr_emerg("!!! S10 FIX: PERI_CTRL3 UNLOCKED & CONNECTED !!!\n");
 			iounmap(peri_ctrl);
 		}
 
+		/* 第三步：将 MAC 核心协议切换为 RMII */
 		if (gmac_syscon) {
 			val = readl(gmac_syscon + 0x10);
 			val &= ~0xe0;
-			val |= 0x80; /* 第三步：强行将 MAC 核心协议切换为 RMII */
+			val |= 0x80; 
 			writel(val, gmac_syscon + 0x10);
 			pr_emerg("!!! S10 FIX: GMAC SYSCON FORCED TO RMII !!!\n");
 			iounmap(gmac_syscon);
