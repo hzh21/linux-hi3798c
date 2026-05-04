@@ -480,22 +480,6 @@ static void hix5hd2_adjust_link(struct net_device *dev)
 		hix5hd2_config_port(dev, phy->speed, phy->duplex);
 		phy_print_status(phy);
 	}
-	/* * ==========================================================
-	 * S10 终极绝杀：无论 CCF 刚才怎么乱改，我在这里拿下最后的话语权！
-	 * ==========================================================
-	 */
-	{
-		void __iomem *s10_lock_crg = ioremap(0xf8a20000, 0x1000);
-		if (s10_lock_crg) {
-			/* 检查当前寄存器的值，如果不是安卓原厂真理 1A8，就强行纠正它 */
-			/* 注意：这里必须是原厂确定的 0x000001A8，千万不要写成 0x00a11041 啦！ */
-			if (readl(s10_lock_crg + 0xcc) != 0x000001A8) {
-				writel(0x000001A8, s10_lock_crg + 0xcc);
-				pr_info("S10 Fix: Deadlock 0xcc to 0x000001A8 in adjust_link!\n");
-			}
-			iounmap(s10_lock_crg);
-		}
-	}
 }
 
 static void hix5hd2_rx_refill(struct hix5hd2_priv *priv)
@@ -872,7 +856,6 @@ static int hix5hd2_net_open(struct net_device *dev)
 	}
 
 	ret = clk_prepare_enable(priv->mac_ifc_clk);
-	
 	if (ret < 0) {
 		clk_disable_unprepare(priv->mac_core_clk);
 		netdev_err(dev, "failed to enable mac ifc clk %d\n", ret);
@@ -899,6 +882,7 @@ static int hix5hd2_net_open(struct net_device *dev)
 
 	hix5hd2_port_enable(priv);
 	hix5hd2_irq_enable(priv);
+
 	return 0;
 }
 
@@ -1175,8 +1159,6 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto out_free_netdev;
 	}
-	/* --- S10 斩断 Regmap 羁绊 1：设为空指针 --- */
-	priv->mac_core_clk = NULL; 
 
 	ret = clk_prepare_enable(priv->mac_core_clk);
 	if (ret < 0) {
@@ -1187,8 +1169,6 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	priv->mac_ifc_clk = devm_clk_get(&pdev->dev, "mac_ifc");
 	if (IS_ERR(priv->mac_ifc_clk))
 		priv->mac_ifc_clk = NULL;
-	/* --- S10 斩断 Regmap 羁绊 2 --- */
-	priv->mac_ifc_clk = NULL;
 
 	ret = clk_prepare_enable(priv->mac_ifc_clk);
 	if (ret < 0) {
@@ -1199,15 +1179,11 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	priv->mac_core_rst = devm_reset_control_get(dev, "mac_core");
 	if (IS_ERR(priv->mac_core_rst))
 		priv->mac_core_rst = NULL;
-	/* --- S10 斩断 Regmap 羁绊 3 --- */
-	priv->mac_core_rst = NULL;
 	hix5hd2_mac_core_reset(priv);
 
 	priv->mac_ifc_rst = devm_reset_control_get(dev, "mac_ifc");
 	if (IS_ERR(priv->mac_ifc_rst))
 		priv->mac_ifc_rst = NULL;
-	/* --- S10 斩断 Regmap 羁绊 4 --- */
-	priv->mac_ifc_rst = NULL;
 
 	priv->phy_rst = devm_reset_control_get(dev, "phy");
 	if (IS_ERR(priv->phy_rst)) {
@@ -1219,9 +1195,6 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 						 DELAYS_NUM);
 		if (ret)
 			goto out_disable_clk;
-		
-		/* --- S10 斩断 Regmap 羁绊 5 --- */
-		priv->phy_rst = NULL;
 		hix5hd2_phy_reset(priv);
 	}
 
@@ -1248,10 +1221,7 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		netdev_err(ndev, "not find phy-mode\n");
 		goto err_mdiobus;
 	}
-	/* 增加一个简单的校验逻辑，确保内核支持 RMII */
-	if (priv->phy_mode == PHY_INTERFACE_MODE_RMII) {
-	    netdev_info(ndev, "configuring for RMII mode (S10 specific)\n");
-	}
+
 	priv->phy_node = of_parse_phandle(node, "phy-handle", 0);
 	if (!priv->phy_node) {
 		netdev_err(ndev, "not find phy-handle\n");
@@ -1313,41 +1283,6 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		goto out_destroy_queue;
 	}
 
-	/* --- S10 终极补丁：复刻原厂 .reg Module 19 初始化 --- */
-{
-    void __iomem *s10_sys_ctrl;
-    void __iomem *s10_iocfg_base;
-    u32 val;
-
-    /* 1. 配置 RMII 模式与时钟开关 (0xf9843010) */
-    s10_sys_ctrl = ioremap(0xf9843000, 0x20);
-    if (s10_sys_ctrl) {
-        // 先按 .reg 逻辑清理 0xf984300c (掩码 0xe0)
-        val = readl(s10_sys_ctrl + 0x0c);
-        val &= ~0xe0;
-        writel(val, s10_sys_ctrl + 0x0c);
-
-        // 设置 0xf9843010 为 0x80 (Bit 7=1 开启 RMII)
-        val = readl(s10_sys_ctrl + 0x10);
-        val &= ~0xe0;
-        val |= 0x80; 
-        writel(val, s10_sys_ctrl + 0x10);
-        
-        pr_info("S10 Fix: RMII mode set (0xf9843010 = 0x80)\n");
-        iounmap(s10_sys_ctrl);
-    }
-
-    /* 2. 强制修复 Pinmux 引脚复用 (0xf80000a8, 0xf80000ac) */
-    s10_iocfg_base = ioremap(0xf8000000, 0x200);
-    if (s10_iocfg_base) {
-        // 根据 .reg 计算出的合并值填入
-        writel(0x0101ffff, s10_iocfg_base + 0xa8); 
-        writel(0xffffffff, s10_iocfg_base + 0xac);
-        
-        pr_info("S10 Fix: Pinmux forced for RMII (0xa8=0x0101ffff, 0xac=0xffffffff)\n");
-        iounmap(s10_iocfg_base);
-    }
-}
 	clk_disable_unprepare(priv->mac_ifc_clk);
 	clk_disable_unprepare(priv->mac_core_clk);
 
