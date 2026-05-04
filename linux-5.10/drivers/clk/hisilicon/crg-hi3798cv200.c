@@ -38,6 +38,7 @@
 #define HI3798CV200_FIXED_166P5M		84
 #define HI3798CV200_SDIO0_MUX			85
 #define HI3798CV200_COMBPHY0_MUX		86
+#define HI3798CV200_SDIO2_MUX			87
 
 #define HI3798CV200_CRG_NR_CLKS			128
 
@@ -83,6 +84,9 @@ static struct hisi_mux_clock hi3798cv200_mux_clks[] = {
 	{ HI3798CV200_SDIO0_MUX, "sdio0_mux", sdio_mux_p,
 		ARRAY_SIZE(sdio_mux_p), CLK_SET_RATE_PARENT,
 		0x9c, 8, 2, 0, sdio_mux_table, },
+	{ HI3798CV200_SDIO2_MUX, "sdio2_mux", sdio_mux_p,
+		ARRAY_SIZE(sdio_mux_p), CLK_SET_RATE_PARENT,
+		0x28c, 8, 2, 0, sdio_mux_table, },
 };
 
 static u32 mmc_phase_regvals[] = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -94,6 +98,12 @@ static struct hisi_phase_clock hi3798cv200_phase_clks[] = {
 		mmc_phase_regvals, ARRAY_SIZE(mmc_phase_regvals) },
 	{ HISTB_MMC_DRV_CLK, "mmc_drive", "clk_mmc_ciu",
 		CLK_SET_RATE_PARENT, 0xa0, 16, 3, mmc_phase_degrees,
+		mmc_phase_regvals, ARRAY_SIZE(mmc_phase_regvals) },
+	{ HISTB_SDIO2_SAMPLE_CLK, "sdio2_sample", "clk_sdio2_ciu",
+		CLK_SET_RATE_PARENT, 0x28c, 12, 3, mmc_phase_degrees,
+		mmc_phase_regvals, ARRAY_SIZE(mmc_phase_regvals) },
+	{ HISTB_SDIO2_DRV_CLK, "sdio2_drive", "clk_sdio2_ciu",
+		CLK_SET_RATE_PARENT, 0x28c, 16, 3, mmc_phase_degrees,
 		mmc_phase_regvals, ARRAY_SIZE(mmc_phase_regvals) },
 };
 
@@ -125,6 +135,11 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 		CLK_SET_RATE_PARENT, 0xa0, 0, 0, },
 	{ HISTB_MMC_CIU_CLK, "clk_mmc_ciu", "mmc_mux",
 		CLK_SET_RATE_PARENT, 0xa0, 1, 0, },
+	/* SDIO2 */
+	{ HISTB_SDIO2_BIU_CLK, "clk_sdio2_biu", "200m",
+		CLK_SET_RATE_PARENT, 0x28c, 0, 0, },
+	{ HISTB_SDIO2_CIU_CLK, "clk_sdio2_ciu", "sdio2_mux",
+		CLK_SET_RATE_PARENT, 0x28c, 1, 0, },
 	/* PCIE*/
 	{ HISTB_PCIE_BUS_CLK, "clk_pcie_bus", "200m",
 		CLK_SET_RATE_PARENT, 0x18c, 0, 0, },
@@ -135,7 +150,7 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 	{ HISTB_PCIE_AUX_CLK, "clk_pcie_aux", "24m",
 		CLK_SET_RATE_PARENT, 0x18c, 3, 0, },
 	/* Ethernet */
-	 { HI3798CV200_ETH_PUB_CLK, "clk_pub", NULL,
+	{ HI3798CV200_ETH_PUB_CLK, "clk_pub", NULL,
 		CLK_SET_RATE_PARENT, 0xcc, 5, 0, },
 	{ HI3798CV200_ETH_BUS_CLK, "clk_bus", "clk_pub",
 		CLK_SET_RATE_PARENT, 0xcc, 0, 0, },
@@ -151,7 +166,6 @@ static const struct hisi_gate_clock hi3798cv200_gate_clks[] = {
 		CLK_SET_RATE_PARENT, 0xcc, 4, 0, },
 	{ HISTB_ETH1_MACIF_CLK, "clk_macif1", "clk_bus_m1",
 		CLK_SET_RATE_PARENT, 0xcc, 25, 0, },
-		
 	/* COMBPHY0 */
 	{ HISTB_COMBPHY0_CLK, "clk_combphy0", "combphy0_mux",
 		CLK_SET_RATE_PARENT, 0x188, 0, 0, },
@@ -354,7 +368,6 @@ MODULE_DEVICE_TABLE(of, hi3798cv200_crg_match_table);
 static int hi3798cv200_crg_probe(struct platform_device *pdev)
 {
 	struct hisi_crg_dev *crg;
-	void __iomem *base;
 
 	crg = devm_kmalloc(&pdev->dev, sizeof(*crg), GFP_KERNEL);
 	if (!crg)
@@ -375,28 +388,8 @@ static int hi3798cv200_crg_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, crg);
-
-	/* --- S10 硬件强制配置 --- */
-	base = ioremap(0xf8a20000, 0x1000); 
-	if (base) {
-		/* 1. 尝试解锁序列 */
-		writel(0x12345678, base + 0x0); 
-
-		/* 2. 强制写入：RMII模式 + SoC输出50M时钟 + 释放PHY复位(位13) */
-		/* 建议优先尝试你 U-Boot 读到的 0x00a11041 */
-		writel(0x00a11041, base + 0xcc); 
-		
-		/* 验证写入结果 */
-		if ((readl(base + 0xcc) & 0xff) == 0x41 || (readl(base + 0xcc) & 0xff) == 0xa8) {
-			pr_info("S10 Fix: Success! PERI_CTRL3 set to RMII mode.\n");
-		} else {
-			pr_err("S10 Fix: Fail! PERI_CTRL3 is still 0x%08x\n", readl(base + 0xcc));
-		}
-		iounmap(base);
-	} /* 修正：补充 if (base) 的闭合大括号 */
-
 	return 0;
-} /* 修正：补充函数体的闭合大括号 */
+}
 
 static int hi3798cv200_crg_remove(struct platform_device *pdev)
 {
