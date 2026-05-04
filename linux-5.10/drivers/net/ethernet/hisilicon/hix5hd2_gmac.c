@@ -1222,6 +1222,20 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		goto err_mdiobus;
 	}
 
+	/* ========================================================
+	 * S10 终极硬核补丁：放下 MAC 和 PHY 之间的物理吊桥！
+	 * ======================================================== */
+	if (priv->phy_mode == PHY_INTERFACE_MODE_RMII) {
+		void __iomem *peri_ctrl = ioremap(0xf8a20000, 0x1000);
+		if (peri_ctrl) {
+			writel(0x12345678, peri_ctrl + 0x0);  /* 第一步：破解海思硬件写保护！ */
+			writel(0x0190C001, peri_ctrl + 0xcc); /* 第二步：放下 RMII 物理吊桥，连通 50MHz 时钟！ */
+			pr_info("S10 Fix: PERI_CTRL3 Hardware Bridge UNLOCKED and CONNECTED!\n");
+			iounmap(peri_ctrl);
+		}
+	}
+	/* ======================================================== */
+	
 	priv->phy_node = of_parse_phandle(node, "phy-handle", 0);
 	if (!priv->phy_node) {
 		netdev_err(ndev, "not find phy-handle\n");
