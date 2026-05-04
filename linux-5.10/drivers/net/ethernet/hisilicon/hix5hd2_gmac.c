@@ -1223,15 +1223,27 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	}
 
 	/* ========================================================
-	 * S10 终极硬核补丁：放下 MAC 和 PHY 之间的物理吊桥！
+	 * S10 终极暴力防呆补丁：无视一切解析错误，强制贯通硬件！
 	 * ======================================================== */
-	if (priv->phy_mode == PHY_INTERFACE_MODE_RMII) {
+	{
 		void __iomem *peri_ctrl = ioremap(0xf8a20000, 0x1000);
+		void __iomem *gmac_syscon = ioremap(0xf9843000, 0x20);
+		u32 val;
+
 		if (peri_ctrl) {
 			writel(0x12345678, peri_ctrl + 0x0);  /* 第一步：破解海思硬件写保护！ */
-			writel(0x0190C001, peri_ctrl + 0xcc); /* 第二步：放下 RMII 物理吊桥，连通 50MHz 时钟！ */
-			pr_info("S10 Fix: PERI_CTRL3 Hardware Bridge UNLOCKED and CONNECTED!\n");
+			writel(0x0190C001, peri_ctrl + 0xcc); /* 第二步：强行放下 RMII 物理吊桥，接通时钟！ */
+			pr_emerg("!!! S10 FIX: PERI_CTRL3 UNLOCKED & CONNECTED !!!\n");
 			iounmap(peri_ctrl);
+		}
+
+		if (gmac_syscon) {
+			val = readl(gmac_syscon + 0x10);
+			val &= ~0xe0;
+			val |= 0x80; /* 第三步：强行将 MAC 核心协议切换为 RMII */
+			writel(val, gmac_syscon + 0x10);
+			pr_emerg("!!! S10 FIX: GMAC SYSCON FORCED TO RMII !!!\n");
+			iounmap(gmac_syscon);
 		}
 	}
 	/* ======================================================== */
