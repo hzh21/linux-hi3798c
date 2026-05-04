@@ -1223,15 +1223,16 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	}
 
 	/* ========================================================
-	 * S10 终极暴力防呆补丁：砸锁、切协议、焊死物理引脚！
+	 * S10 终极硬核补丁：集齐原厂 .reg 的最后四块拼图！
 	 * ======================================================== */
 	{
+		void __iomem *pinmux = ioremap(0xf8a21000, 0x100);
+		void __iomem *sysctrl = ioremap(0xf8000000, 0x200); /* ！！！你漏掉的关键时序控制器！！！ */
 		void __iomem *peri_ctrl = ioremap(0xf8a20000, 0x1000);
 		void __iomem *gmac_syscon = ioremap(0xf9843000, 0x20);
-		void __iomem *pinmux = ioremap(0xf8a21000, 0x100); /* 新增：物理管脚复用控制器 */
 		u32 val;
 
-		/* 第一步：强行焊死 18 根物理引脚，铺通 RMII 数据和时钟的高速公路 */
+		/* 拼图一：强行焊死 18 根物理引脚 (源自 .reg Module 17) */
 		if (pinmux) {
 			writel(0x00000130, pinmux + 0x38);
 			writel(0x00000131, pinmux + 0x54);
@@ -1251,11 +1252,19 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 			writel(0x00000170, pinmux + 0x8c);
 			writel(0x00000170, pinmux + 0x90);
 			writel(0x00000172, pinmux + 0x94);
-			pr_emerg("!!! S10 FIX: PINMUX FORCED TO RMII MODE !!!\n");
+			pr_emerg("!!! S10 FIX: PINMUX 18-PINS FORCED !!!\n");
 			iounmap(pinmux);
 		}
 
-		/* 第二步：破解海思硬件写保护，放下物理吊桥 */
+		/* 拼图二：恢复被误杀的 MAC 时钟时序与内部路由 (源自 .reg Module 19) */
+		if (sysctrl) {
+			writel(0x0101ffff, sysctrl + 0xa8);
+			writel(0xffffffff, sysctrl + 0xac);
+			pr_emerg("!!! S10 FIX: SYSCTRL TIMING (0xa8, 0xac) RESTORED !!!\n");
+			iounmap(sysctrl);
+		}
+
+		/* 拼图三：破解海思硬件写保护，放下物理吊桥 */
 		if (peri_ctrl) {
 			writel(0x12345678, peri_ctrl + 0x0);  
 			writel(0x0190C001, peri_ctrl + 0xcc); 
@@ -1263,13 +1272,17 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 			iounmap(peri_ctrl);
 		}
 
-		/* 第三步：将 MAC 核心协议切换为 RMII */
+		/* 拼图四：将 MAC 核心协议切换为 RMII (源自 .reg Module 19) */
 		if (gmac_syscon) {
+			val = readl(gmac_syscon + 0x0c);
+			val &= ~0xe0;
+			writel(val, gmac_syscon + 0x0c);
+
 			val = readl(gmac_syscon + 0x10);
 			val &= ~0xe0;
 			val |= 0x80; 
 			writel(val, gmac_syscon + 0x10);
-			pr_emerg("!!! S10 FIX: GMAC SYSCON FORCED TO RMII !!!\n");
+			pr_emerg("!!! S10 FIX: GMAC SYSCON FORCED TO RMII (0x80) !!!\n");
 			iounmap(gmac_syscon);
 		}
 	}
