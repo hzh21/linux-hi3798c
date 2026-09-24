@@ -156,8 +156,9 @@
 #define RGMII_SPEED_1000		0x2c
 #define RGMII_SPEED_100			0x2f
 #define RGMII_SPEED_10			0x2d
-#define RMII_SPEED_100          0x01  // 根据 GMAC 逻辑，百兆通常对应 0x01
-#define RMII_MODE_BIT           BIT(7) // 对应 .reg 中的 0x80
+#define RMII_SPEED_100          0x0f  /* 对齐 U-Boot port_mode_100_rmii=0x9F 低4位 */
+#define RMII_SPEED_10           0x0d  /* 对齐 U-Boot port_mode_10_rmii=0x9D 低4位 */
+#define RMII_MODE_BIT           BIT(7) /* 对应 .reg 中的 0x80 */
 #define MII_SPEED_100			0x0f
 #define MII_SPEED_10			0x0d
 #define GMAC_SPEED_1000			0x05
@@ -311,15 +312,17 @@ static void hix5hd2_config_port(struct net_device *dev, u32 speed, u32 duplex)
 			val = MII_SPEED_10;
 		break;
 	/* 新增 RMII 支持分支 */
-    case PHY_INTERFACE_MODE_RMII:
-        // 根据 .reg 数据 0xf9843010 写 0x80 (RMII_MODE_BIT)
-        // 同时根据速率选择控制值
-        val = RMII_MODE_BIT; 
-        if (speed == SPEED_100)
-            val |= RMII_SPEED_100;
-        // 注意：这里写入的是控制接口模式的寄存器 (0xf9843010)
-        break;
-    default:
+	case PHY_INTERFACE_MODE_RMII:
+		/* 根据 .reg 数据 0xf9843010 写 0x80 (RMII_MODE_BIT)
+		 * 同时根据速率选择控制值 (对齐 U-Boot port_mode_10/100_rmii = 0x9D/0x9F) */
+		val = RMII_MODE_BIT;
+		if (speed == SPEED_100)
+			val |= RMII_SPEED_100;
+		else
+			val |= RMII_SPEED_10;
+		/* 注意：这里写入的是控制接口模式的寄存器 (0xf9843010) */
+		break;
+	default:
         netdev_warn(dev, "not supported mode\n");
         val = MII_SPEED_10;
         break;
