@@ -10,6 +10,7 @@
 
 	aliases {
 		serial0 = &uart0;
+		serial2 = &uart2;
 		sata0 = &sata;
 	};
 
@@ -22,38 +23,53 @@
 		reg = <0x0 0x0 0x0 0x80000000>; /* 2GB RAM */
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		system_ready {
+			label = "blue:power";
+			gpios = <&gpio9 0 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+
+		ir_feedback {
+			label = "blue:status";
+			gpios = <&gpio8 1 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "rc-feedback";
+		};
+
+		boot_indicator {
+			label = "green:boot";
+			gpios = <&gpio3 5 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+	};
+
+	/* PHY 电源 (常开，纯使能无 GPIO) : gmac1 的 phy-supply */
+	regulator_phy_power: regulator-phy-power {
+		compatible = "regulator-fixed";
+		regulator-name = "PHY_PWR";
+		enable-active-high;
+		regulator-always-on;
+	};
+
 	/* 定义 SATA 硬盘电源 */
 	vcc_sata: regulator-vcc-sata {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc-sata";
-		gpio = <&gpio9 4 GPIO_ACTIVE_HIGH>; /* 你测得的 492 */
+		gpio = <&gpio3 4 GPIO_ACTIVE_HIGH>; /* 实测全局 GPIO500 有效 */
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
-		enable-active-high;
-		regulator-always-on;
-	};
-
-	/* 定义其他必须拉高的 GPIO (72 和 79) */
-	vcc_pwr_extra: regulator-vcc-extra {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc-extra";
-		/* 我们可以用一个 dummy 节点或者在 pinctrl 里处理，
-		   这里用 regulator 方式最稳妥 */
-		gpio = <&gpio9 0 GPIO_ACTIVE_HIGH>; /* Android 下的 72 */
-		enable-active-high;
-		regulator-always-on;
-	};
-
-	vcc_pwr_extra2: regulator-vcc-extra2 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc-extra2";
-		gpio = <&gpio9 7 GPIO_ACTIVE_HIGH>; /* Android 下的 79 */
 		enable-active-high;
 		regulator-always-on;
 	};
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&uart2 {
 	status = "okay";
 };
 
@@ -68,6 +84,7 @@
 	assigned-clocks = <&crg 80>;
 	assigned-clock-parents = <&crg 66>;
 	assigned-clock-rates = <25000000>;
+	sata-controller = <&sata>;
 };
 
 /* eMMC 配置 */
@@ -90,13 +107,85 @@
 	cap-sd-highspeed;
 };
 
-/* 网络配置 (RMII, PHY ID 1) */
+/* USB 全开: USB2 (ohci/ehci) + USB3 xhci0 + 板载 USB WiFi 专用 xhci@98b0000 */
+&usb2_phy1 {
+	status = "okay";
+};
+
+&usb2_phy2 {
+	status = "okay";
+};
+
+&ohci {
+	status = "okay";
+};
+
+&ehci {
+	status = "okay";
+};
+
+&xhci0 {
+	status = "okay";
+};
+
+/* 板载 USB WiFi (RTL88x2BU) 专用 xHCI 控制器, 只挂 usb2-phy@124 的 port0 */
+&{/soc@f0000000/} {
+	xhci1: xhci@98b0000 {
+		compatible = "hisilicon,hi3798cv200-xhci";
+		reg = <0x98b0000 0x10000>;
+		interrupts = <GIC_SPI 85 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&crg HISTB_USB3_BUS_CLK1>,
+			 <&crg HISTB_USB3_UTMI_CLK1>,
+			 <&crg HISTB_USB3_PIPE_CLK1>,
+			 <&crg HISTB_USB3_SUSPEND_CLK1>;
+		clock-names = "bus", "utmi", "pipe", "suspend";
+		resets = <&crg 0xb0 28>;
+		reset-names = "soft";
+		phys = <&usb2_phy2_port0>;
+		phy-names = "usb2-phy";
+		status = "okay";
+	};
+};
+
+/* GPIO 扩展端口 (与运行中 dtb 一致) */
+&gpio2 {
+	status = "okay";
+};
+
+&gpio3 {
+	status = "okay";
+};
+
+&gpio6 {
+	status = "okay";
+};
+
+&gpio8 {
+	status = "okay";
+};
+
+&gpio9 {
+	status = "okay";
+};
+
+&gpio10 {
+	status = "okay";
+};
+
+&gpio11 {
+	status = "okay";
+};
+
+/* 网络配置 (RMII, PHY ID 1, MACIF 参考时钟 50MHz) */
 &gmac1 {
 	status = "okay";
 	#address-cells = <1>;
 	#size-cells = <0>;
 	phy-handle = <&eth_phy1>;
 	phy-mode = "rmii";
+	phy-supply = <&regulator_phy_power>;
+	assigned-clocks = <&crg HISTB_ETH1_MACIF_CLK>;
+	assigned-clock-rates = <50000000>;
 	hisilicon,phy-reset-delays-us = <30000 30000 50000>;
 
 	eth_phy1: phy@1 {
