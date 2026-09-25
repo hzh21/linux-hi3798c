@@ -485,6 +485,28 @@ static void hix5hd2_adjust_link(struct net_device *dev)
 	}
 }
 
+/* KSZ8081 RMII 专用初始化 (照搬 U-Boot bl-hi3798c higmac.c):
+ * reg 0x1F bit7 = RMII 50MHz 时钟模式
+ * reg 0x16 bit1 = RMII 模式覆盖
+ * 通用 micrel 驱动不做这两步, 缺它们会导致 RMII 下 ANLPAR=0 / 无 link */
+static void hix5hd2_ksz8081_rmii_init(struct phy_device *phy)
+{
+	int val;
+
+	if ((phy->phy_id & 0xfffffff0) != 0x00221560)
+		return;
+
+	val = phy_read(phy, 0x1f);
+	if (val < 0)
+		return;
+	phy_write(phy, 0x1f, val | BIT(7));
+
+	val = phy_read(phy, 0x16);
+	if (val < 0)
+		return;
+	phy_write(phy, 0x16, val | BIT(1));
+}
+
 static void hix5hd2_rx_refill(struct hix5hd2_priv *priv)
 {
 	struct hix5hd2_desc *desc;
@@ -875,9 +897,17 @@ static int hix5hd2_net_open(struct net_device *dev)
 
 	phy_attached_info(phy);
 
+	/* KSZ8081 RMII 专用初始化, 必须在 phy_start(自协商) 之前完成 */
+	hix5hd2_ksz8081_rmii_init(phy);
+
 	phy_start(phy);
 	hix5hd2_hw_init(priv);
 	hix5hd2_rx_refill(priv);
+
+	/* 先按当前 PHY 状态配置 MACIF 端口模式 (RMII 速率/双工),
+	 * 必须在 netif_start_queue 之前完成, 否则 adjust_link 在队列
+	 * 已运行时 reset MACIF 会导致 TX 卡死 -> watchdog timeout */
+	hix5hd2_config_port(dev, phy->speed, phy->duplex);
 
 	netdev_reset_queue(dev);
 	netif_start_queue(dev);
